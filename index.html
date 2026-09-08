@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pop & Cute Space Invaders</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1p:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1p', sans-serif;
+            background: linear-gradient(135deg, #fbcfe8 0%, #e0e7ff 50%, #bae6fd 100%);
+            color: #334155;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+        .pop-shadow {
+            box-shadow: 0 10px 25px -5px rgba(236, 72, 153, 0.3), 0 8px 10px -6px rgba(236, 72, 153, 0.2);
+        }
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border-radius: 1.5rem;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-between min-h-screen p-4 select-none">
+
+    <header class="w-full max-w-2xl flex justify-between items-center bg-white/80 border-4 border-pink-300 rounded-3xl p-4 pop-shadow backdrop-blur-md">
+        <div class="flex flex-col">
+            <span class="text-[11px] text-pink-500 font-extug tracking-wide">スコア</span>
+            <span id="scoreVal" class="text-base md:text-xl text-purple-600 font-black">000000</span>
+        </div>
+        <div class="flex flex-col items-center">
+            <h1 class="text-xs md:text-base text-pink-600 font-black tracking-wider text-center">💖 キュートインベーダー 💖</h1>
+            <span id="waveVal" class="text-[10px] text-indigo-400 font-bold mt-0.5">WAVE 1</span>
+        </div>
+        <div class="flex flex-col items-end">
+            <span class="text-[11px] text-pink-500 font-extrabold tracking-wide">いのち</span>
+            <div id="livesContainer" class="flex gap-1 text-pink-500 text-xs md:text-sm">
+                💖💖💖
+            </div>
+        </div>
+    </header>
+
+    <div id="aiBanner" class="w-full max-w-2xl my-2 bg-white/90 border-2 border-indigo-200 rounded-2xl p-3 text-center shadow-md transition-all duration-300">
+        <div class="flex items-center justify-center gap-2 mb-1">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-pink-400 animate-bounce"></span>
+            <span id="aiSpeaker" class="text-[11px] text-indigo-500 font-black">🌟 AIナビゲーター: 待機中</span>
+        </div>
+        <p id="aiDialogue" class="text-[11px] text-gray-600 font-bold">「かわいいエイリアンたちが近づいてるよ！チャージショットでハートを射抜こう！」</p>
+    </div>
+
+    <main class="relative w-full max-w-2xl flex flex-col items-center my-1">
+        <div class="relative w-full aspect-[3/4] max-h-[50vh] bg-indigo-950 border-4 border-white rounded-3xl overflow-hidden flex items-center justify-center shadow-xl">
+            <canvas id="gameCanvas" class="w-full h-full block bg-gradient-to-b from-purple-900 via-indigo-950 to-pink-950"></canvas>
+            
+            <!-- Overlay Screen (Start / Game Over) -->
+            <div id="gameOverlay" class="absolute inset-0 bg-pink-950/80 flex flex-col items-center justify-center p-6 text-center z-10 backdrop-blur-md">
+                <div class="bg-white/95 p-6 rounded-3xl border-4 border-pink-300 pop-shadow max-w-sm w-full">
+                    <h2 id="overlayTitle" class="text-base md:text-xl text-pink-600 font-black mb-3">✨ ポップ＆キュート版 ✨</h2>
+                    <p id="overlayDesc" class="text-[11px] text-gray-600 font-bold mb-5 leading-relaxed">
+                        [A/D または 矢印キー] 移動<br>
+                        [Space / FIRE 長押し] キラキラチャージレーザー発射！<br>
+                        可愛い敵をやっつけよう！
+                    </p>
+                    <button id="startBtn" class="w-full py-3 bg-gradient-to-r from-pink-400 to-purple-500 hover:from-pink-500 hover:to-purple-600 text-white font-black text-xs md:text-sm rounded-2xl shadow-lg transition transform active:scale-95 cursor-pointer mb-2">
+                        ゲームスタート！
+                    </button>
+                    <div id="aiAnalysisBox" class="hidden text-left bg-pink-50 border border-pink-200 p-3 rounded-2xl w-full mt-2">
+                        <span class="text-[10px] text-pink-600 font-black block mb-1">🤖 AIアナリストの評価</span>
+                        <p id="aiAnalysisText" class="text-[10px] text-gray-600 font-bold"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charge Meter Bar -->
+        <div class="w-full bg-white/80 rounded-full h-3.5 mt-2 overflow-hidden border-2 border-pink-300 p-0.5">
+            <div id="chargeBar" class="bg-gradient-to-r from-pink-400 via-purple-400 to-yellow-300 h-full w-0 rounded-full transition-all duration-75"></div>
+        </div>
+        <div class="flex justify-between w-full text-[10px] text-indigo-600 font-bold px-2 mt-1">
+            <span>チャージゲージ</span>
+            <span id="chargeStatus">ひかるよ！</span>
+        </div>
+    </main>
+
+    <footer class="w-full max-w-2xl flex flex-col gap-2">
+        <div class="grid grid-cols-3 gap-3 w-full">
+            <button id="leftBtn" class="bg-white/90 active:bg-pink-100 border-3 border-pink-300 rounded-2xl py-3 text-pink-500 font-black flex items-center justify-center text-lg pop-shadow transition">
+                ◀
+            </button>
+            <button id="fireBtn" class="bg-gradient-to-r from-pink-400 to-purple-500 active:from-pink-500 active:to-purple-600 border-3 border-pink-200 rounded-2xl py-3 text-white font-black flex flex-col items-center justify-center text-[11px] pop-shadow transition">
+                <span>💖 はっしゃ 💖</span>
+                <span id="btnChargeText" class="text-[8px] text-pink-100 font-bold">ながおしでパワーアップ</span>
+            </button>
+            <button id="rightBtn" class="bg-white/90 active:bg-pink-100 border-3 border-pink-300 rounded-2xl py-3 text-pink-500 font-black flex items-center justify-center text-lg pop-shadow transition">
+                ▶
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const scoreVal = document.getElementById('scoreVal');
+        const waveVal = document.getElementById('waveVal');
+        const livesContainer = document.getElementById('livesContainer');
+        const gameOverlay = document.getElementById('gameOverlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlayDesc = document.getElementById('overlayDesc');
+        const startBtn = document.getElementById('startBtn');
+        const aiSpeaker = document.getElementById('aiSpeaker');
+        const aiDialogue = document.getElementById('aiDialogue');
+        const aiAnalysisBox = document.getElementById('aiAnalysisBox');
+        const aiAnalysisText = document.getElementById('aiAnalysisText');
+        const chargeBar = document.getElementById('chargeBar');
+        const chargeStatus = document.getElementById('chargeStatus');
+        const btnChargeText = document.getElementById('btnChargeText');
+
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+        const fireBtn = document.getElementById('fireBtn');
+
+        const LOGICAL_WIDTH = 480;
+        const LOGICAL_HEIGHT = 640;
+
+        function resizeCanvas() {
+            canvas.width = LOGICAL_WIDTH;
+            canvas.height = LOGICAL_HEIGHT;
+        }
+        resizeCanvas();
+
+        let score = 0;
+        let lives = 3;
+        let wave = 1;
+        let gameRunning = false;
+        let gameOver = false;
+        let keys = {};
+
+        let isCharging = false;
+        let chargeTime = 0;
+        const maxChargeTime = 60;
+
+        let player = {
+            x: LOGICAL_WIDTH / 2 - 20,
+            y: LOGICAL_HEIGHT - 55,
+            width: 44,
+            height: 24,
+            speed: 5
+        };
+
+        let bullets = [];
+        let invaders = [];
+        let particles = [];
+        let starfield = [];
+
+        function initStars() {
+            starfield = [];
+            for (let i = 0; i < 50; i++) {
+                starfield.push({
+                    x: Math.random() * LOGICAL_WIDTH,
+                    y: Math.random() * LOGICAL_HEIGHT,
+                    size: Math.random() * 3 + 1,
+                    speed: Math.random() * 1 + 0.3,
+                    color: ['#f472b6', '#a78bfa', '#38bdf8', '#fde047'][Math.floor(Math.random() * 4)]
+                });
+            }
+        }
+
+        let invaderDirection = 1;
+        let invaderSpeed = 0.7;
+
+        function initInvaders() {
+            invaders = [];
+            const rows = 4;
+            const cols = 8;
+            const paddingX = 42;
+            const paddingY = 34;
+            const startX = 45;
+            const startY = 75;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    let type = r === 0 ? 3 : (r <= 2 ? 2 : 1);
+                    invaders.push({
+                        x: startX + c * paddingX,
+                        y: startY + r * paddingY,
+                        width: 32,
+                        height: 24,
+                        type: type,
+                        alive: true,
+                        color: r === 0 ? '#fb7185' : (r <= 2 ? '#f43f5e' : '#a855f7')
+                    });
+                }
+            }
+            invaderSpeed = 0.7 + (wave * 0.15);
+            invaderDirection = 1;
+        }
+
+        async function callGemini(systemPrompt, userPrompt) {
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) return text;
+                } catch (err) {
+                    await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+                }
+            }
+            return "通信エラー：AIナビゲーターは少しお休み中です！";
+        }
+
+        async function triggerAiWaveDialogue() {
+            aiSpeaker.textContent = "🌟 AIナビゲーター: 通信中...";
+            aiDialogue.textContent = `「ウェーブ ${wave} スタート！可愛い力を見せてね♪」`;
+
+            const systemPrompt = "あなたはポップで可愛いゲームのAIナビゲーターです。プレイヤーを元気付ける優しいセリフを日本語で1文出力してください。";
+            const userPrompt = `現在のウェーブ: ${wave}, スコア: ${score}`;
+            
+            const dialogue = await callGemini(systemPrompt, userPrompt);
+            aiSpeaker.textContent = `🌟 AIナビゲーター (WAVE ${wave})`;
+            aiDialogue.textContent = `"${dialogue}"`;
+        }
+
+        async function triggerAiGameOverAnalysis() {
+            aiAnalysisBox.classList.remove('hidden');
+            aiAnalysisText.textContent = "AIアナリストが成績をかわいく分析中...";
+
+            const systemPrompt = "あなたは可愛いゲームアナリストです。プレイヤーのスコアとウェーブを元に、楽しくて褒めてくれるようなアドバイスを日本語で伝えてください。";
+            const userPrompt = `最終スコア: ${score}, 到達ウェーブ: ${wave}, 残機: ${lives}`;
+            
+            const analysis = await callGemini(systemPrompt, userPrompt);
+            aiAnalysisText.textContent = analysis;
+        }
+
+        function resetGame(fullReset = true) {
+            if (fullReset) {
+                score = 0;
+                lives = 3;
+                wave = 1;
+            }
+            player.x = LOGICAL_WIDTH / 2 - player.width / 2;
+            bullets = [];
+            particles = [];
+            isCharging = false;
+            chargeTime = 0;
+            initStars();
+            initInvaders();
+            updateHUD();
+        }
+
+        function updateHUD() {
+            scoreVal.textContent = String(score).padStart(6, '0');
+            waveVal.textContent = `WAVE ${wave}`;
+            livesContainer.textContent = '💖'.repeat(Math.max(0, lives));
+        }
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && gameRunning && !isCharging) {
+                isCharging = true;
+                chargeTime = 0;
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' && gameRunning && isCharging) {
+                releaseShot();
+                e.preventDefault();
+            }
+            keys[e.code] = false;
+        });
+
+        leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowLeft'] = true; });
+        leftBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowLeft'] = false; });
+        leftBtn.addEventListener('mousedown', () => { keys['ArrowLeft'] = true; });
+        leftBtn.addEventListener('mouseup', () => { keys['ArrowLeft'] = false; });
+
+        rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowRight'] = true; });
+        rightBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowRight'] = false; });
+        rightBtn.addEventListener('mousedown', () => { keys['ArrowRight'] = true; });
+        rightBtn.addEventListener('mouseup', () => { keys['ArrowRight'] = false; });
+
+        fireBtn.addEventListener('mousedown', () => {
+            if (gameRunning && !isCharging) {
+                isCharging = true;
+                chargeTime = 0;
+            }
+        });
+        fireBtn.addEventListener('mouseup', () => {
+            if (gameRunning && isCharging) {
+                releaseShot();
+            }
+        });
+        fireBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameRunning && !isCharging) {
+                isCharging = true;
+                chargeTime = 0;
+            }
+        });
+        fireBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (gameRunning && isCharging) {
+                releaseShot();
+            }
+        });
+
+        function releaseShot() {
+            isCharging = false;
+            if (chargeTime >= maxChargeTime) {
+                bullets.push({
+                    x: player.x + player.width / 2 - 8,
+                    y: player.y - 35,
+                    width: 16,
+                    height: 45,
+                    speed: 12,
+                    isPlayer: true,
+                    isPiercing: true,
+                    color: '#f43f5e'
+                });
+                createExplosion(player.x + player.width / 2, player.y, '#f472b6');
+            } else {
+                if (bullets.filter(b => b.isPlayer && !b.isPiercing).length < 3) {
+                    bullets.push({
+                        x: player.x + player.width / 2 - 3,
+                        y: player.y,
+                        width: 6,
+                        height: 14,
+                        speed: 8,
+                        isPlayer: true,
+                        isPiercing: false,
+                        color: '#38bdf8'
+                    });
+                }
+            }
+            chargeTime = 0;
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    life: 20,
+                    color: color,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            if (isCharging) {
+                chargeTime = Math.min(maxChargeTime, chargeTime + 1);
+                let pct = (chargeTime / maxChargeTime) * 100;
+                chargeBar.style.width = pct + '%';
+                if (chargeTime >= maxChargeTime) {
+                    chargeStatus.textContent = "🌟 MAXチャージ完了！はなしてね！";
+                    chargeStatus.className = "text-[10px] text-pink-600 font-black animate-pulse";
+                    btnChargeText.textContent = "ボタンをはなして発射！";
+                } else {
+                    chargeStatus.textContent = `チャージ中... ${Math.floor(pct)}%`;
+                    chargeStatus.className = "text-[10px] text-indigo-500 font-bold";
+                    btnChargeText.textContent = "パワーため中...";
+                }
+            } else {
+                chargeBar.style.width = '0%';
+                chargeStatus.textContent = "キラキラパワーためられるよ";
+                chargeStatus.className = "text-[10px] text-indigo-500 font-bold";
+                btnChargeText.textContent = "ながおしでパワーアップ";
+            }
+
+            if ((keys['ArrowLeft'] || keys['KeyA']) && player.x > 10) {
+                player.x -= player.speed;
+            }
+            if ((keys['ArrowRight'] || keys['KeyD']) && player.x < LOGICAL_WIDTH - player.width - 10) {
+                player.x += player.speed;
+            }
+
+            starfield.forEach(star => {
+                star.y += star.speed;
+                if (star.y > LOGICAL_HEIGHT) star.y = 0;
+            });
+
+            bullets.forEach(b => {
+                b.y += b.isPlayer ? -b.speed : b.speed;
+            });
+            bullets = bullets.filter(b => b.y > -50 && b.y < LOGICAL_HEIGHT + 20);
+
+            let hitEdge = false;
+            let activeInvaders = invaders.filter(inv => inv.alive);
+
+            activeInvaders.forEach(inv => {
+                inv.x += invaderSpeed * invaderDirection;
+                if (inv.x <= 15 || inv.x + inv.width >= LOGICAL_WIDTH - 15) {
+                    hitEdge = true;
+                }
+            });
+
+            if (hitEdge) {
+                invaderDirection *= -1;
+                activeInvaders.forEach(inv => {
+                    inv.y += 14;
+                    if (inv.y + inv.height >= player.y) {
+                        triggerGameOver("インベーダーたちに囲まれちゃった…！");
+                    }
+                });
+            }
+
+            if (activeInvaders.length > 0 && Math.random() < (0.02 + wave * 0.003)) {
+                let shooter = activeInvaders[Math.floor(Math.random() * activeInvaders.length)];
+                bullets.push({
+                    x: shooter.x + shooter.width / 2 - 3,
+                    y: shooter.y + shooter.height,
+                    width: 6,
+                    height: 12,
+                    speed: 3.5 + wave * 0.3,
+                    isPlayer: false,
+                    isPiercing: false,
+                    color: '#fbcfe8'
+                });
+            }
+
+            bullets.forEach(b => {
+                if (!b.isPlayer) return;
+
+                invaders.forEach(inv => {
+                    if (inv.alive &&
+                        b.x < inv.x + inv.width &&
+                        b.x + b.width > inv.x &&
+                        b.y < inv.y + inv.height &&
+                        b.y + b.height > inv.y) {
+                        
+                        inv.alive = false;
+                        score += inv.type * (b.isPiercing ? 150 : 100);
+                        createExplosion(inv.x + inv.width / 2, inv.y + inv.height / 2, inv.color);
+                        updateHUD();
+
+                        if (!b.isPiercing) {
+                            b.markedForDeletion = true;
+                        }
+
+                        if (invaders.every(i => !i.alive)) {
+                            wave++;
+                            initInvaders();
+                            updateHUD();
+                            triggerAiWaveDialogue();
+                        }
+                    }
+                });
+            });
+
+            bullets = bullets.filter(b => !b.markedForDeletion);
+
+            bullets.forEach(b => {
+                if (b.isPlayer) return;
+
+                if (b.x < player.x + player.width &&
+                    b.x + b.width > player.x &&
+                    b.y < player.y + player.height &&
+                    b.y + b.height > player.y) {
+                    
+                    b.markedForDeletion = true;
+                    lives--;
+                    createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#38bdf8');
+                    updateHUD();
+
+                    if (lives <= 0) {
+                        triggerGameOver("ゲームオーバー！でもよくがんばったね！");
+                    }
+                }
+            });
+
+            bullets = bullets.filter(b => !b.markedForDeletion);
+
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+            });
+            particles = particles.filter(p => p.life > 0);
+        }
+
+        function draw() {
+            ctx.fillStyle = '#1e1b4b';
+            ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+            starfield.forEach(star => {
+                ctx.fillStyle = star.color;
+                ctx.globalAlpha = Math.random() * 0.6 + 0.4;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+
+            // Draw Cute Player (Spaceship as cute rocket/heart)
+            ctx.fillStyle = '#f472b6';
+            ctx.shadowBlur = isCharging ? 20 : 10;
+            ctx.shadowColor = '#f43f5e';
+            ctx.beginPath();
+            ctx.roundRect(player.x + 16, player.y, 12, 12, 6);
+            ctx.roundRect(player.x + 6, player.y + 10, 32, 14, 8);
+            ctx.fill();
+            ctx.fillStyle = '#38bdf8';
+            ctx.fillRect(player.x + 19, player.y + 4, 6, 6);
+            ctx.shadowBlur = 0;
+
+            // Draw Cute Invaders (Round aliens with eyes)
+            invaders.forEach(inv => {
+                if (!inv.alive) return;
+                ctx.fillStyle = inv.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = inv.color;
+                
+                ctx.beginPath();
+                ctx.roundRect(inv.x, inv.y, inv.width, inv.height, 10);
+                ctx.fill();
+
+                // Cute eyes
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(inv.x + 7, inv.y + 6, 5, 6);
+                ctx.fillRect(inv.x + inv.width - 12, inv.y + 6, 5, 6);
+                ctx.fillStyle = '#1e1b4b';
+                ctx.fillRect(inv.x + 9, inv.y + 8, 2, 3);
+                ctx.fillRect(inv.x + inv.width - 10, inv.y + 8, 2, 3);
+                
+                ctx.shadowBlur = 0;
+            });
+
+            // Draw Bullets & Lasers (Sparkling stars/beams)
+            bullets.forEach(b => {
+                ctx.fillStyle = b.color;
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = b.color;
+                ctx.beginPath();
+                ctx.roundRect(b.x, b.y, b.width, b.height, b.width / 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // Draw Particles (Sparkles)
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 20;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (gameRunning) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function triggerGameOver(message) {
+            gameRunning = false;
+            gameOver = true;
+            overlayTitle.textContent = "またあそんでね！";
+            overlayDesc.textContent = `${message}\nスコア: ${score}`;
+            startBtn.textContent = "もういっかいプレイ";
+            gameOverlay.classList.remove('hidden');
+            triggerAiGameOverAnalysis();
+        }
+
+        startBtn.addEventListener('click', async () => {
+            gameOverlay.classList.add('hidden');
+            aiAnalysisBox.classList.add('hidden');
+            resetGame(true);
+            gameRunning = true;
+            requestAnimationFrame(gameLoop);
+            await triggerAiWaveDialogue();
+        });
+
+        initStars();
+        initInvaders();
+        draw();
+    </script>
+</body>
+</html>
