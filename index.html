@@ -33,6 +33,7 @@
         </div>
         <div class="flex flex-col items-center">
             <h1 class="text-xs md:text-base text-pink-600 font-black tracking-wider text-center">💖 キュートインベーダー 💖</h1>
+            <span class="text-[9px] text-pink-500 font-extrabold mt-0.5">ハイスコア <span id="highScoreVal" class="text-purple-600">000000</span></span>
             <span id="waveVal" class="text-[10px] text-indigo-400 font-bold mt-0.5">WAVE 1</span>
         </div>
         <div class="flex flex-col items-end">
@@ -42,14 +43,6 @@
             </div>
         </div>
     </header>
-
-    <div id="aiBanner" class="w-full max-w-2xl my-2 bg-white/90 border-2 border-indigo-200 rounded-2xl p-3 text-center shadow-md transition-all duration-300">
-        <div class="flex items-center justify-center gap-2 mb-1">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-pink-400 animate-bounce"></span>
-            <span id="aiSpeaker" class="text-[11px] text-indigo-500 font-black">🌟 AIナビゲーター: 待機中</span>
-        </div>
-        <p id="aiDialogue" class="text-[11px] text-gray-600 font-bold">「かわいいエイリアンたちが近づいてるよ！チャージショットでハートを射抜こう！」</p>
-    </div>
 
     <main class="relative w-full max-w-2xl flex flex-col items-center my-1">
         <div class="relative w-full aspect-[3/4] max-h-[50vh] bg-indigo-950 border-4 border-white rounded-3xl overflow-hidden flex items-center justify-center shadow-xl">
@@ -67,10 +60,6 @@
                     <button id="startBtn" class="w-full py-3 bg-gradient-to-r from-pink-400 to-purple-500 hover:from-pink-500 hover:to-purple-600 text-white font-black text-xs md:text-sm rounded-2xl shadow-lg transition transform active:scale-95 cursor-pointer mb-2">
                         ゲームスタート！
                     </button>
-                    <div id="aiAnalysisBox" class="hidden text-left bg-pink-50 border border-pink-200 p-3 rounded-2xl w-full mt-2">
-                        <span class="text-[10px] text-pink-600 font-black block mb-1">🤖 AIアナリストの評価</span>
-                        <p id="aiAnalysisText" class="text-[10px] text-gray-600 font-bold"></p>
-                    </div>
                 </div>
             </div>
         </div>
@@ -106,16 +95,13 @@
         const ctx = canvas.getContext('2d');
 
         const scoreVal = document.getElementById('scoreVal');
+        const highScoreVal = document.getElementById('highScoreVal');
         const waveVal = document.getElementById('waveVal');
         const livesContainer = document.getElementById('livesContainer');
         const gameOverlay = document.getElementById('gameOverlay');
         const overlayTitle = document.getElementById('overlayTitle');
         const overlayDesc = document.getElementById('overlayDesc');
         const startBtn = document.getElementById('startBtn');
-        const aiSpeaker = document.getElementById('aiSpeaker');
-        const aiDialogue = document.getElementById('aiDialogue');
-        const aiAnalysisBox = document.getElementById('aiAnalysisBox');
-        const aiAnalysisText = document.getElementById('aiAnalysisText');
         const chargeBar = document.getElementById('chargeBar');
         const chargeStatus = document.getElementById('chargeStatus');
         const btnChargeText = document.getElementById('btnChargeText');
@@ -135,6 +121,8 @@
         resizeCanvas();
 
         let score = 0;
+        const HIGH_SCORE_KEY = 'cute-invaders-high-score';
+        let highScore = Number.parseInt(localStorage.getItem(HIGH_SCORE_KEY), 10) || 0;
         let lives = 3;
         let wave = 1;
         let gameRunning = false;
@@ -238,55 +226,6 @@
             });
         }
 
-        async function callGemini(systemPrompt, userPrompt) {
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-            
-            const payload = {
-                contents: [{ parts: [{ text: userPrompt }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] }
-            };
-
-            for (let attempt = 0; attempt < 3; attempt++) {
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) return text;
-                } catch (err) {
-                    await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
-                }
-            }
-            return "通信エラー：AIナビゲーターは少しお休み中です！";
-        }
-
-        async function triggerAiWaveDialogue() {
-            aiSpeaker.textContent = "🌟 AIナビゲーター: 通信中...";
-            aiDialogue.textContent = `「ウェーブ ${wave} スタート！可愛い力を見せてね♪」`;
-
-            const systemPrompt = "あなたはポップで可愛いゲームのAIナビゲーターです。プレイヤーを元気付ける優しいセリフを日本語で1文出力してください。";
-            const userPrompt = `現在のウェーブ: ${wave}, スコア: ${score}`;
-            
-            const dialogue = await callGemini(systemPrompt, userPrompt);
-            aiSpeaker.textContent = `🌟 AIナビゲーター (WAVE ${wave})`;
-            aiDialogue.textContent = `"${dialogue}"`;
-        }
-
-        async function triggerAiGameOverAnalysis() {
-            aiAnalysisBox.classList.remove('hidden');
-            aiAnalysisText.textContent = "AIアナリストが成績をかわいく分析中...";
-
-            const systemPrompt = "あなたは可愛いゲームアナリストです。プレイヤーのスコアとウェーブを元に、楽しくて褒めてくれるようなアドバイスを日本語で伝えてください。";
-            const userPrompt = `最終スコア: ${score}, 到達ウェーブ: ${wave}, 残機: ${lives}`;
-            
-            const analysis = await callGemini(systemPrompt, userPrompt);
-            aiAnalysisText.textContent = analysis;
-        }
-
         function resetGame(fullReset = true) {
             if (fullReset) {
                 score = 0;
@@ -310,7 +249,12 @@
         }
 
         function updateHUD() {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+            }
             scoreVal.textContent = String(score).padStart(6, '0');
+            highScoreVal.textContent = String(highScore).padStart(6, '0');
             waveVal.textContent = `WAVE ${wave}`;
             livesContainer.textContent = '💖'.repeat(Math.max(0, lives));
         }
@@ -564,7 +508,6 @@
                             wave++;
                             initInvaders();
                             updateHUD();
-                            triggerAiWaveDialogue();
                         }
                     }
                 });
@@ -821,21 +764,19 @@
             overlayDesc.textContent = `${message}\nスコア: ${score}`;
             startBtn.textContent = "もういっかいプレイ";
             gameOverlay.classList.remove('hidden');
-            triggerAiGameOverAnalysis();
         }
 
-        startBtn.addEventListener('click', async () => {
+        startBtn.addEventListener('click', () => {
             gameOverlay.classList.add('hidden');
-            aiAnalysisBox.classList.add('hidden');
             resetGame(true);
             gameRunning = true;
             requestAnimationFrame(gameLoop);
-            await triggerAiWaveDialogue();
         });
 
         initStars();
         initInvaders();
         initBunkers();
+        updateHUD();
         draw();
     </script>
 </body>
