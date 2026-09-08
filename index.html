@@ -201,17 +201,17 @@
         }
 
         function initBunkers() {
-            const blockWidth = 8;
-            const blockHeight = 7;
-            const bunkerTop = LOGICAL_HEIGHT - 155;
-            const bunkerStarts = [54, 208, 362];
+            const blockWidth = 12;
+            const blockHeight = 10;
+            const bunkerTop = LOGICAL_HEIGHT - 180;
+            const bunkerStarts = [36, 180, 324];
             const layout = [
-                '  XXXX  ',
-                ' XXXXXX ',
-                'XXXXXXXX',
-                'XXXXXXXX',
-                'XXX  XXX',
-                'XX    XX'
+                '   XXXX   ',
+                '  XXXXXX  ',
+                ' XXXXXXXX ',
+                'XXXXXXXXXX',
+                'XXX    XXX',
+                'XXX    XXX'
             ];
 
             bunkers = [];
@@ -618,12 +618,12 @@
             // Draw three destructible energy fortresses.
             bunkers.forEach(block => {
                 if (!block.alive) return;
-                ctx.fillStyle = '#22d3ee';
-                ctx.shadowBlur = 7;
-                ctx.shadowColor = '#0ea5e9';
-                ctx.fillRect(block.x, block.y, block.width - 1, block.height - 1);
+                ctx.fillStyle = '#0891b2';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#22d3ee';
+                ctx.fillRect(block.x, block.y, block.width - 2, block.height - 2);
                 ctx.fillStyle = '#cffafe';
-                ctx.fillRect(block.x + 1, block.y + 1, block.width - 3, 1);
+                ctx.fillRect(block.x + 2, block.y + 2, block.width - 6, 2);
                 ctx.shadowBlur = 0;
             });
 
