@@ -41,6 +41,7 @@
             <div id="livesContainer" class="flex gap-1 text-pink-500 text-xs md:text-sm">
                 💖💖💖
             </div>
+            <button id="soundBtn" class="mt-1 text-[9px] text-indigo-500 font-black hover:text-pink-500 transition">🔊 SOUND ON</button>
         </div>
     </header>
 
@@ -73,6 +74,7 @@
             <span id="chargeStatus">ひかるよ！</span>
         </div>
         <p id="powerStatus" class="text-[10px] text-cyan-700 font-black mt-1">アイテムをキャッチしてパワーアップ！</p>
+        <p id="comboStatus" class="text-[10px] text-purple-600 font-black mt-1">連続撃破でスコアアップ！</p>
     </main>
 
     <footer class="w-full max-w-2xl flex flex-col gap-2">
@@ -106,10 +108,12 @@
         const chargeStatus = document.getElementById('chargeStatus');
         const btnChargeText = document.getElementById('btnChargeText');
         const powerStatus = document.getElementById('powerStatus');
+        const comboStatus = document.getElementById('comboStatus');
 
         const leftBtn = document.getElementById('leftBtn');
         const rightBtn = document.getElementById('rightBtn');
         const fireBtn = document.getElementById('fireBtn');
+        const soundBtn = document.getElementById('soundBtn');
 
         const LOGICAL_WIDTH = 480;
         const LOGICAL_HEIGHT = 640;
@@ -122,7 +126,10 @@
 
         let score = 0;
         const HIGH_SCORE_KEY = 'cute-invaders-high-score';
+        const SOUND_ENABLED_KEY = 'cute-invaders-sound-enabled';
         let highScore = Number.parseInt(localStorage.getItem(HIGH_SCORE_KEY), 10) || 0;
+        let soundEnabled = localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
+        let audioContext;
         let lives = 3;
         let wave = 1;
         let gameRunning = false;
@@ -150,6 +157,8 @@
         let threeWayFrames = 0;
         let slowFrames = 0;
         let shieldActive = false;
+        let combo = 0;
+        let comboFrames = 0;
 
         function initStars() {
             starfield = [];
@@ -226,6 +235,65 @@
             });
         }
 
+        function initializeAudio() {
+            if (!soundEnabled) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+
+            if (!audioContext) audioContext = new AudioContext();
+            if (audioContext.state === 'suspended') audioContext.resume();
+        }
+
+        function playTone(frequency, duration, type = 'sine', volume = 0.08, slideTo = frequency, delay = 0) {
+            if (!soundEnabled || !audioContext) return;
+
+            const startTime = audioContext.currentTime + delay;
+            const oscillator = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, startTime);
+            oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), startTime + duration);
+            gain.gain.setValueAtTime(0.0001, startTime);
+            gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+            oscillator.connect(gain);
+            gain.connect(audioContext.destination);
+            oscillator.start(startTime);
+            oscillator.stop(startTime + duration);
+        }
+
+        function playSound(sound) {
+            if (sound === 'start') {
+                playTone(392, 0.12, 'triangle', 0.07, 523);
+                playTone(523, 0.16, 'triangle', 0.07, 784, 0.1);
+            } else if (sound === 'shot') {
+                playTone(680, 0.08, 'square', 0.045, 380);
+            } else if (sound === 'charge') {
+                playTone(280, 0.28, 'sawtooth', 0.08, 1280);
+            } else if (sound === 'defeat') {
+                playTone(240, 0.12, 'square', 0.06, 90);
+            } else if (sound === 'powerUp') {
+                playTone(523, 0.14, 'sine', 0.08, 784);
+                playTone(784, 0.2, 'sine', 0.08, 1047, 0.1);
+            } else if (sound === 'bunker') {
+                playTone(160, 0.06, 'triangle', 0.04, 100);
+            } else if (sound === 'shield') {
+                playTone(880, 0.25, 'sine', 0.08, 220);
+            } else if (sound === 'damage') {
+                playTone(180, 0.3, 'sawtooth', 0.1, 60);
+            } else if (sound === 'wave') {
+                playTone(523, 0.12, 'triangle', 0.07, 659);
+                playTone(659, 0.12, 'triangle', 0.07, 784, 0.1);
+                playTone(784, 0.2, 'triangle', 0.07, 1047, 0.2);
+            } else if (sound === 'gameOver') {
+                playTone(330, 0.35, 'sawtooth', 0.09, 80);
+            }
+        }
+
+        function updateSoundButton() {
+            soundBtn.textContent = soundEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
+        }
+
         function resetGame(fullReset = true) {
             if (fullReset) {
                 score = 0;
@@ -241,11 +309,14 @@
             threeWayFrames = 0;
             slowFrames = 0;
             shieldActive = false;
+            combo = 0;
+            comboFrames = 0;
             initStars();
             initInvaders();
             initBunkers();
             updateHUD();
             updatePowerStatus();
+            updateComboStatus();
         }
 
         function updateHUD() {
@@ -269,6 +340,17 @@
             powerStatus.className = effects.length
                 ? 'text-[10px] text-pink-600 font-black mt-1 animate-pulse'
                 : 'text-[10px] text-cyan-700 font-black mt-1';
+        }
+
+        function updateComboStatus() {
+            if (combo > 1 && comboFrames > 0) {
+                const multiplier = Math.min(3, 1 + Math.floor((combo - 1) / 3));
+                comboStatus.textContent = `✨ ${combo} COMBO! SCORE x${multiplier}`;
+                comboStatus.className = 'text-[10px] text-pink-600 font-black mt-1 animate-pulse';
+            } else {
+                comboStatus.textContent = '連続撃破でスコアアップ！';
+                comboStatus.className = 'text-[10px] text-purple-600 font-black mt-1';
+            }
         }
 
         function dropPowerUp(x, y) {
@@ -298,8 +380,19 @@
             }
 
             createExplosion(powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2, powerUp.color);
+            playSound('powerUp');
             updatePowerStatus();
         }
+
+        soundBtn.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem(SOUND_ENABLED_KEY, String(soundEnabled));
+            if (soundEnabled) {
+                initializeAudio();
+                playSound('powerUp');
+            }
+            updateSoundButton();
+        });
 
         window.addEventListener('keydown', (e) => {
             keys[e.code] = true;
@@ -367,6 +460,7 @@
                     color: '#f43f5e'
                 });
                 createExplosion(player.x + player.width / 2, player.y, '#f472b6');
+                playSound('charge');
             } else {
                 const directions = threeWayFrames > 0 ? [-3, 0, 3] : [0];
                 const activeShots = bullets.filter(b => b.isPlayer && !b.isPiercing).length;
@@ -385,6 +479,7 @@
                             color: threeWayFrames > 0 ? '#fde047' : '#38bdf8'
                         });
                     });
+                    playSound('shot');
                 }
             }
             chargeTime = 0;
@@ -409,6 +504,13 @@
 
             if (threeWayFrames > 0) threeWayFrames--;
             if (slowFrames > 0) slowFrames--;
+            if (comboFrames > 0) {
+                comboFrames--;
+                if (comboFrames === 0) {
+                    combo = 0;
+                    updateComboStatus();
+                }
+            }
             updatePowerStatus();
 
             if (isCharging) {
@@ -495,10 +597,15 @@
                         b.y + b.height > inv.y) {
                         
                         inv.alive = false;
-                        score += inv.type * (b.isPiercing ? 150 : 100);
+                        combo = comboFrames > 0 ? combo + 1 : 1;
+                        comboFrames = 90;
+                        const comboMultiplier = Math.min(3, 1 + Math.floor((combo - 1) / 3));
+                        score += inv.type * (b.isPiercing ? 150 : 100) * comboMultiplier;
                         createExplosion(inv.x + inv.width / 2, inv.y + inv.height / 2, inv.color);
                         dropPowerUp(inv.x + inv.width / 2, inv.y + inv.height / 2);
+                        playSound('defeat');
                         updateHUD();
+                        updateComboStatus();
 
                         if (!b.isPiercing) {
                             b.markedForDeletion = true;
@@ -508,6 +615,7 @@
                             wave++;
                             initInvaders();
                             updateHUD();
+                            playSound('wave');
                         }
                     }
                 });
@@ -526,6 +634,7 @@
                         block.alive = false;
                         b.markedForDeletion = true;
                         createExplosion(block.x + block.width / 2, block.y + block.height / 2, '#22d3ee');
+                        playSound('bunker');
                     }
                 });
             });
@@ -557,10 +666,12 @@
                     if (shieldActive) {
                         shieldActive = false;
                         createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#f472b6');
+                        playSound('shield');
                         updatePowerStatus();
                     } else {
                         lives--;
                         createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#38bdf8');
+                        playSound('damage');
                         updateHUD();
                     }
 
@@ -764,12 +875,15 @@
             overlayDesc.textContent = `${message}\nスコア: ${score}`;
             startBtn.textContent = "もういっかいプレイ";
             gameOverlay.classList.remove('hidden');
+            playSound('gameOver');
         }
 
         startBtn.addEventListener('click', () => {
+            initializeAudio();
             gameOverlay.classList.add('hidden');
             resetGame(true);
             gameRunning = true;
+            playSound('start');
             requestAnimationFrame(gameLoop);
         });
 
@@ -777,6 +891,7 @@
         initInvaders();
         initBunkers();
         updateHUD();
+        updateSoundButton();
         draw();
     </script>
 </body>
