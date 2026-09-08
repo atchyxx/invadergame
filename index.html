@@ -83,6 +83,7 @@
             <span>チャージゲージ</span>
             <span id="chargeStatus">ひかるよ！</span>
         </div>
+        <p id="powerStatus" class="text-[10px] text-cyan-700 font-black mt-1">アイテムをキャッチしてパワーアップ！</p>
     </main>
 
     <footer class="w-full max-w-2xl flex flex-col gap-2">
@@ -118,6 +119,7 @@
         const chargeBar = document.getElementById('chargeBar');
         const chargeStatus = document.getElementById('chargeStatus');
         const btnChargeText = document.getElementById('btnChargeText');
+        const powerStatus = document.getElementById('powerStatus');
 
         const leftBtn = document.getElementById('leftBtn');
         const rightBtn = document.getElementById('rightBtn');
@@ -156,6 +158,10 @@
         let particles = [];
         let starfield = [];
         let bunkers = [];
+        let powerUps = [];
+        let threeWayFrames = 0;
+        let slowFrames = 0;
+        let shieldActive = false;
 
         function initStars() {
             starfield = [];
@@ -290,18 +296,65 @@
             player.x = LOGICAL_WIDTH / 2 - player.width / 2;
             bullets = [];
             particles = [];
+            powerUps = [];
             isCharging = false;
             chargeTime = 0;
+            threeWayFrames = 0;
+            slowFrames = 0;
+            shieldActive = false;
             initStars();
             initInvaders();
             initBunkers();
             updateHUD();
+            updatePowerStatus();
         }
 
         function updateHUD() {
             scoreVal.textContent = String(score).padStart(6, '0');
             waveVal.textContent = `WAVE ${wave}`;
             livesContainer.textContent = '💖'.repeat(Math.max(0, lives));
+        }
+
+        function updatePowerStatus() {
+            const effects = [];
+            if (threeWayFrames > 0) effects.push(`⭐ 3WAY ${Math.ceil(threeWayFrames / 60)}秒`);
+            if (shieldActive) effects.push('🛡️ シールド');
+            if (slowFrames > 0) effects.push(`⏱️ スロー ${Math.ceil(slowFrames / 60)}秒`);
+
+            powerStatus.textContent = effects.length ? effects.join('  ') : 'アイテムをキャッチしてパワーアップ！';
+            powerStatus.className = effects.length
+                ? 'text-[10px] text-pink-600 font-black mt-1 animate-pulse'
+                : 'text-[10px] text-cyan-700 font-black mt-1';
+        }
+
+        function dropPowerUp(x, y) {
+            if (Math.random() > 0.2) return;
+
+            const types = ['threeWay', 'shield', 'slow'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const colors = { threeWay: '#fde047', shield: '#f472b6', slow: '#a78bfa' };
+            powerUps.push({
+                x: x - 12,
+                y: y,
+                width: 24,
+                height: 24,
+                speed: 2.1,
+                type: type,
+                color: colors[type]
+            });
+        }
+
+        function applyPowerUp(powerUp) {
+            if (powerUp.type === 'threeWay') {
+                threeWayFrames = 600;
+            } else if (powerUp.type === 'shield') {
+                shieldActive = true;
+            } else {
+                slowFrames = 600;
+            }
+
+            createExplosion(powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2, powerUp.color);
+            updatePowerStatus();
         }
 
         window.addEventListener('keydown', (e) => {
@@ -371,16 +424,22 @@
                 });
                 createExplosion(player.x + player.width / 2, player.y, '#f472b6');
             } else {
-                if (bullets.filter(b => b.isPlayer && !b.isPiercing).length < 3) {
-                    bullets.push({
-                        x: player.x + player.width / 2 - 3,
-                        y: player.y,
-                        width: 6,
-                        height: 14,
-                        speed: 8,
-                        isPlayer: true,
-                        isPiercing: false,
-                        color: '#38bdf8'
+                const directions = threeWayFrames > 0 ? [-3, 0, 3] : [0];
+                const activeShots = bullets.filter(b => b.isPlayer && !b.isPiercing).length;
+                if (activeShots + directions.length <= 3) {
+                    directions.forEach(vx => {
+                        bullets.push({
+                            x: player.x + player.width / 2 - 3,
+                            y: player.y,
+                            width: 6,
+                            height: 14,
+                            speed: 8,
+                            vx: vx,
+                            isPlayer: true,
+                            isPiercing: false,
+                            isStar: threeWayFrames > 0,
+                            color: threeWayFrames > 0 ? '#fde047' : '#38bdf8'
+                        });
                     });
                 }
             }
@@ -403,6 +462,10 @@
 
         function update() {
             if (!gameRunning) return;
+
+            if (threeWayFrames > 0) threeWayFrames--;
+            if (slowFrames > 0) slowFrames--;
+            updatePowerStatus();
 
             if (isCharging) {
                 chargeTime = Math.min(maxChargeTime, chargeTime + 1);
@@ -438,14 +501,16 @@
 
             bullets.forEach(b => {
                 b.y += b.isPlayer ? -b.speed : b.speed;
+                b.x += b.vx || 0;
             });
             bullets = bullets.filter(b => b.y > -50 && b.y < LOGICAL_HEIGHT + 20);
 
             let hitEdge = false;
             let activeInvaders = invaders.filter(inv => inv.alive);
+            const enemySpeedMultiplier = slowFrames > 0 ? 0.45 : 1;
 
             activeInvaders.forEach(inv => {
-                inv.x += invaderSpeed * invaderDirection;
+                inv.x += invaderSpeed * enemySpeedMultiplier * invaderDirection;
                 if (inv.x <= 15 || inv.x + inv.width >= LOGICAL_WIDTH - 15) {
                     hitEdge = true;
                 }
@@ -488,6 +553,7 @@
                         inv.alive = false;
                         score += inv.type * (b.isPiercing ? 150 : 100);
                         createExplosion(inv.x + inv.width / 2, inv.y + inv.height / 2, inv.color);
+                        dropPowerUp(inv.x + inv.width / 2, inv.y + inv.height / 2);
                         updateHUD();
 
                         if (!b.isPiercing) {
@@ -523,6 +589,19 @@
 
             bullets = bullets.filter(b => !b.markedForDeletion);
 
+            powerUps.forEach(powerUp => {
+                powerUp.y += powerUp.speed;
+                if (powerUp.x < player.x + player.width &&
+                    powerUp.x + powerUp.width > player.x &&
+                    powerUp.y < player.y + player.height &&
+                    powerUp.y + powerUp.height > player.y) {
+
+                    powerUp.collected = true;
+                    applyPowerUp(powerUp);
+                }
+            });
+            powerUps = powerUps.filter(powerUp => !powerUp.collected && powerUp.y < LOGICAL_HEIGHT + powerUp.height);
+
             bullets.forEach(b => {
                 if (b.isPlayer) return;
 
@@ -532,9 +611,15 @@
                     b.y + b.height > player.y) {
                     
                     b.markedForDeletion = true;
-                    lives--;
-                    createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#38bdf8');
-                    updateHUD();
+                    if (shieldActive) {
+                        shieldActive = false;
+                        createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#f472b6');
+                        updatePowerStatus();
+                    } else {
+                        lives--;
+                        createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#38bdf8');
+                        updateHUD();
+                    }
 
                     if (lives <= 0) {
                         triggerGameOver("ゲームオーバー！でもよくがんばったね！");
@@ -564,6 +649,17 @@
                 ctx.fill();
             });
             ctx.globalAlpha = 1.0;
+
+            if (shieldActive) {
+                ctx.strokeStyle = '#f9a8d4';
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 18;
+                ctx.shadowColor = '#f472b6';
+                ctx.beginPath();
+                ctx.arc(player.x + player.width / 2, player.y + 13, 34, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
 
             // Draw Player (neon interceptor)
             ctx.shadowBlur = isCharging ? 24 : 12;
@@ -627,14 +723,75 @@
                 ctx.shadowBlur = 0;
             });
 
+            powerUps.forEach(powerUp => {
+                const centerX = powerUp.x + powerUp.width / 2;
+                const centerY = powerUp.y + powerUp.height / 2;
+                ctx.shadowBlur = 14;
+                ctx.shadowColor = powerUp.color;
+
+                if (powerUp.type === 'threeWay') {
+                    ctx.fillStyle = '#fde047';
+                    ctx.beginPath();
+                    for (let point = 0; point < 10; point++) {
+                        const angle = -Math.PI / 2 + point * Math.PI / 5;
+                        const radius = point % 2 === 0 ? 12 : 5;
+                        const x = centerX + Math.cos(angle) * radius;
+                        const y = centerY + Math.sin(angle) * radius;
+                        point === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (powerUp.type === 'shield') {
+                    ctx.fillStyle = '#f472b6';
+                    ctx.fillRect(powerUp.x, powerUp.y + 6, powerUp.width, 18);
+                    ctx.fillStyle = '#fdf2f8';
+                    ctx.fillRect(centerX - 2, powerUp.y + 6, 4, 18);
+                    ctx.fillRect(powerUp.x, powerUp.y + 12, powerUp.width, 3);
+                    ctx.fillStyle = '#f472b6';
+                    ctx.beginPath();
+                    ctx.arc(centerX - 4, powerUp.y + 5, 5, 0, Math.PI * 2);
+                    ctx.arc(centerX + 4, powerUp.y + 5, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#a78bfa';
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#f5f3ff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(centerX, centerY - 7);
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(centerX + 5, centerY + 3);
+                    ctx.stroke();
+                }
+                ctx.shadowBlur = 0;
+            });
+
             // Draw Bullets & Lasers (Sparkling stars/beams)
             bullets.forEach(b => {
                 ctx.fillStyle = b.color;
                 ctx.shadowBlur = 12;
                 ctx.shadowColor = b.color;
-                ctx.beginPath();
-                ctx.roundRect(b.x, b.y, b.width, b.height, b.width / 2);
-                ctx.fill();
+                if (b.isStar) {
+                    const centerX = b.x + b.width / 2;
+                    const centerY = b.y + b.height / 2;
+                    ctx.beginPath();
+                    for (let point = 0; point < 10; point++) {
+                        const angle = -Math.PI / 2 + point * Math.PI / 5;
+                        const radius = point % 2 === 0 ? 7 : 3;
+                        const x = centerX + Math.cos(angle) * radius;
+                        const y = centerY + Math.sin(angle) * radius;
+                        point === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.roundRect(b.x, b.y, b.width, b.height, b.width / 2);
+                    ctx.fill();
+                }
                 ctx.shadowBlur = 0;
             });
 
