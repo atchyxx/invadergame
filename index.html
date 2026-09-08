@@ -155,6 +155,7 @@
         let invaders = [];
         let particles = [];
         let starfield = [];
+        let bunkers = [];
 
         function initStars() {
             starfield = [];
@@ -197,6 +198,38 @@
             }
             invaderSpeed = 0.7 + (wave * 0.15);
             invaderDirection = 1;
+        }
+
+        function initBunkers() {
+            const blockWidth = 8;
+            const blockHeight = 7;
+            const bunkerTop = LOGICAL_HEIGHT - 155;
+            const bunkerStarts = [54, 208, 362];
+            const layout = [
+                '  XXXX  ',
+                ' XXXXXX ',
+                'XXXXXXXX',
+                'XXXXXXXX',
+                'XXX  XXX',
+                'XX    XX'
+            ];
+
+            bunkers = [];
+            bunkerStarts.forEach(startX => {
+                layout.forEach((row, rowIndex) => {
+                    [...row].forEach((cell, columnIndex) => {
+                        if (cell === 'X') {
+                            bunkers.push({
+                                x: startX + columnIndex * blockWidth,
+                                y: bunkerTop + rowIndex * blockHeight,
+                                width: blockWidth,
+                                height: blockHeight,
+                                alive: true
+                            });
+                        }
+                    });
+                });
+            });
         }
 
         async function callGemini(systemPrompt, userPrompt) {
@@ -261,6 +294,7 @@
             chargeTime = 0;
             initStars();
             initInvaders();
+            initBunkers();
             updateHUD();
         }
 
@@ -473,6 +507,23 @@
             bullets = bullets.filter(b => !b.markedForDeletion);
 
             bullets.forEach(b => {
+                bunkers.forEach(block => {
+                    if (block.alive &&
+                        b.x < block.x + block.width &&
+                        b.x + b.width > block.x &&
+                        b.y < block.y + block.height &&
+                        b.y + b.height > block.y) {
+
+                        block.alive = false;
+                        b.markedForDeletion = true;
+                        createExplosion(block.x + block.width / 2, block.y + block.height / 2, '#22d3ee');
+                    }
+                });
+            });
+
+            bullets = bullets.filter(b => !b.markedForDeletion);
+
+            bullets.forEach(b => {
                 if (b.isPlayer) return;
 
                 if (b.x < player.x + player.width &&
@@ -514,16 +565,32 @@
             });
             ctx.globalAlpha = 1.0;
 
-            // Draw Cute Player (Spaceship as cute rocket/heart)
-            ctx.fillStyle = '#f472b6';
-            ctx.shadowBlur = isCharging ? 20 : 10;
-            ctx.shadowColor = '#f43f5e';
+            // Draw Player (neon interceptor)
+            ctx.shadowBlur = isCharging ? 24 : 12;
+            ctx.shadowColor = '#22d3ee';
             ctx.beginPath();
-            ctx.roundRect(player.x + 16, player.y, 12, 12, 6);
-            ctx.roundRect(player.x + 6, player.y + 10, 32, 14, 8);
+            ctx.moveTo(player.x + 22, player.y);
+            ctx.lineTo(player.x + 34, player.y + 19);
+            ctx.lineTo(player.x + 42, player.y + 23);
+            ctx.lineTo(player.x + 31, player.y + 23);
+            ctx.lineTo(player.x + 27, player.y + 27);
+            ctx.lineTo(player.x + 17, player.y + 27);
+            ctx.lineTo(player.x + 13, player.y + 23);
+            ctx.lineTo(player.x + 2, player.y + 23);
+            ctx.lineTo(player.x + 10, player.y + 19);
+            ctx.closePath();
+            ctx.fillStyle = '#0ea5e9';
             ctx.fill();
-            ctx.fillStyle = '#38bdf8';
-            ctx.fillRect(player.x + 19, player.y + 4, 6, 6);
+            ctx.fillStyle = '#a5f3fc';
+            ctx.beginPath();
+            ctx.moveTo(player.x + 22, player.y + 5);
+            ctx.lineTo(player.x + 27, player.y + 16);
+            ctx.lineTo(player.x + 17, player.y + 16);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#f472b6';
+            ctx.fillRect(player.x + 4, player.y + 22, 10, 3);
+            ctx.fillRect(player.x + 30, player.y + 22, 10, 3);
             ctx.shadowBlur = 0;
 
             // Draw Cute Invaders (Round aliens with eyes)
@@ -545,6 +612,18 @@
                 ctx.fillRect(inv.x + 9, inv.y + 8, 2, 3);
                 ctx.fillRect(inv.x + inv.width - 10, inv.y + 8, 2, 3);
                 
+                ctx.shadowBlur = 0;
+            });
+
+            // Draw three destructible energy fortresses.
+            bunkers.forEach(block => {
+                if (!block.alive) return;
+                ctx.fillStyle = '#22d3ee';
+                ctx.shadowBlur = 7;
+                ctx.shadowColor = '#0ea5e9';
+                ctx.fillRect(block.x, block.y, block.width - 1, block.height - 1);
+                ctx.fillStyle = '#cffafe';
+                ctx.fillRect(block.x + 1, block.y + 1, block.width - 3, 1);
                 ctx.shadowBlur = 0;
             });
 
@@ -599,6 +678,7 @@
 
         initStars();
         initInvaders();
+        initBunkers();
         draw();
     </script>
 </body>
